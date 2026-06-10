@@ -78,6 +78,7 @@ import { useAutkMapLifecycle } from '../../../adapters/node/autkMapLifecycle';
 import { useAutkPlotLifecycle } from '../../../adapters/node/autkPlotLifecycle';
 import { useAutkComputeLifecycle } from '../../../adapters/node/autkComputeLifecycle';
 import { useAutkDbLifecycle } from '../../../adapters/node/autkDbLifecycle';
+import { setMergeSlot } from 'utils/mergeFlowUtils';
 
 function makeMockData(overrides: Partial<NodeLifecycleData> = {}): NodeLifecycleData {
   return {
@@ -236,6 +237,18 @@ describe('Lifecycle hooks — NodeLifecycleHook contract conformance', () => {
       expect(output.type).toBe('source');
       expect(output.position).toBe('right');
     });
+
+    test('does not fire outputCallBack if the slots are empty or undefined', async () => {
+      const mockOutputCallBack = jest.fn();
+      
+      const result = await callLifecycle(useMergeFlowLifecycle, {
+        nodeId: 'merge',
+        outputCallback : mockOutputCallBack,
+        input : ['', '', undefined, undefined, undefined]
+      })
+
+      expect(mockOutputCallBack).not.toHaveBeenCalled();
+    }) 
   });
 
   describe('useDataPoolLifecycle', () => {

@@ -831,6 +831,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     }
 
     function playNodesUpTo(targetNodeId: string) {
+        if (playAllStateRef.current != null) return;    //guard if play all state is happening 
         const currentNodes = reactFlow.getNodes();
         const currentEdges = reactFlow.getEdges();
 
