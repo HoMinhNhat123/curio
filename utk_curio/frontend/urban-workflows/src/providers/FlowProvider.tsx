@@ -873,7 +873,6 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     // a box generated a new output. Propagate it to directly connected boxes
     const applyNewOutput = (newOutput: IOutput) => {
         const currentEdges = reactFlow.getEdges();
-
         // Find which nodes are directly downstream of the output source
         const nodesAffected: string[] = [];
         for (const edge of currentEdges) {
