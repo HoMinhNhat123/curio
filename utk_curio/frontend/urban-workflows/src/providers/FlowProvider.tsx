@@ -882,6 +882,9 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
             }
         }
 
+        // console.log("applying new output from ", nodesAffected, " and ", currentEdges);
+
+
         // Skip setNodes entirely when nothing downstream needs updating — an
         // empty map still returns a new array reference which causes every node
         // component to re-render (Data Pool table, autk-grammar, etc.).
