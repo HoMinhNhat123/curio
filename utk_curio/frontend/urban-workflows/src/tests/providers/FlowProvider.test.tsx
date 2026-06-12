@@ -33,6 +33,8 @@ jest.mock('reactflow', () => {
   }
 });
 
+
+
 jest.mock('../../providers/ToastProvider', () => ({
   useToastContext: () => ({ showToast: jest.fn() })
 }));
@@ -74,14 +76,46 @@ import FlowProvider, { useFlowContext } from "../../providers/FlowProvider";
 const wrapper = ({ children }: { children: React.ReactNode }) => 
   React.createElement(FlowProvider, null, children)
 
+const makeNode = (id: string, extraData: any = {}) => ({
+  id,
+  type: "__curioUniversalNode",
+  position: { x: 0, y: 0 },
+  data: {
+    nodeId: id, nodeType: "curio.builtin/computation-analysis@1", ...extraData
+  }
+});
+
+const makeMergeNode = (id: string, extraData: any = {}) => ({
+  id,
+  type: '__curioUniversalNode',
+  position: { x: 0, y: 0 },
+  data: {
+    nodeId: id,
+    nodeType: NodeType.MERGE_FLOW,
+    ...extraData,
+  },
+});
+
+const makeEdge = (source: string, target: string, sourceHandle = 'out', targetHandle = 'in_0') => ({
+  id: `${source}-${target}`,
+  source,
+  target,
+  sourceHandle,
+  targetHandle,
+});
+
 
 describe('FlowProviderTest', () => {
   describe('testing onConnect function', () => {
-    it('onConnect initializes Merge Flow source and input arrays', () => {
+    /**
+     *  create two connection:  a->merge and b->merge
+     * checking if mergeNode.data.source has both node on it 
+     */
+    it('onConnect simple test, make sure that mergeNode.data.source has two nodes connected to it', () => {
       mockInitialNode = [
-        { id: 'a', type: '__curioUniversalNode', position: { x: 0, y: 0 }, data: {nodeId: 'a', nodeType: 'curio.builtin/computation-analysis@1'} },
-        { id: 'b', type: '__curioUniversalNode', position: { x: 0, y: 30 }, data: {nodeId: 'b', nodeType: 'curio.builtin/computation-analysis@1'} },
-        { id: 'merge', type: '__curioUniversalNode', position: { x: 100, y: 0 }, data: { nodeId: 'merge', NodeType: NodeType.MERGE_FLOW, } },
+        makeNode('a'),
+        makeNode('b'),
+        makeMergeNode('merge'),
       ];
 
       mockEdges = [];
@@ -96,22 +130,23 @@ describe('FlowProviderTest', () => {
           targetHandle: 'in_0',
         } as any);
       });
-
-      const mergeNode = result.current.nodes.find((node: any) => node.id === 'merge');
+      
+      let mergeNode = result.current.nodes.find((node: any) => node.id === 'merge');
 
       expect(mergeNode?.data.source?.[0]).toBe('a');
 
-      // act(() => {
-      //   result.current.onConnect({
-      //     source: 'b',
-      //     target: 'merge',
-      //     sourceHandle: 'out',
-      //     targetHandle: 'in_1',
-      //   } as any);
-      // });
+      act(() => {
+        result.current.onConnect({
+          source: 'b',
+          target: 'merge',
+          sourceHandle: 'out',
+          targetHandle: 'in_1',
+        } as any);
+      });
 
-      // expect(mergeNode?.data.source?.[1]).toBe('b');
-      // console.log(mergeNode?.data);
+      mergeNode = result.current.nodes.find((node: any) => node.id === 'merge');
+      console.log(mergeNode?.data);
+      expect(mergeNode?.data.source?.[1]).toBe('b');
     });
   })
 
@@ -128,18 +163,16 @@ describe('FlowProviderTest', () => {
     //standalone c node shouldn't have receive any downstream input
     it('ApplyNewOutput send data downstream', () => {
       //create a->b edge
-      mockEdges = [{ id: 'a-b', source: 'a', target: 'b', sourceHandle: 'out', targetHandle: 'input-0' }]
+      mockEdges = [makeEdge('a', 'b')]
       //create a, b, c nodes
       mockInitialNode = [
-        { id: 'a', position: { x: 0, y: 0 }, data: {} },
-        { id: 'b', position: { x: 100, y: 0 }, data: { label: 'python computation', source: 'intial source', input: 'initial input'} },
-        { id: 'c', position: {x: 0, y: 100}, data: {nodeType: 'javascript'}}
+        makeNode('a'),
+        makeNode('b', { label: 'python computation', source: 'initial source', input: 'initial input' }),
+        makeNode('c', { nodeType: 'javascript' }),
       ]
 
       const { result } = renderHook(() => useFlowContext(), { wrapper });
-      act(() =>
-        result.current.applyNewOutput({ nodeId: 'a', output: "artifact-sample" })
-      )
+      act(() => { result.current.applyNewOutput({ nodeId: 'a', output: "artifact-sample" }); })
 
       const nodeA = result.current.nodes.find((node: any) => node.id == 'a');
       const nodeB = result.current.nodes.find((node: any) => node.id == 'b');
@@ -160,20 +193,18 @@ describe('FlowProviderTest', () => {
     //testing if when a send data downstream to correct nodes (b and c)
     it('ApplyNewOutput send data to the correct nodes', () => {
       mockEdges = [
-        { id: 'a-b', source: 'a', target: 'b', sourceHandle: 'out', targetHandle: 'input-0' },
-        { id: 'a-c', source: 'a', target: 'c', sourceHandle: 'output-1', targetHandle: 'input-1'}            
+        makeEdge('a', 'b'),
+        makeEdge('a', 'c', 'out_1', 'in_1'),
       ]
       mockInitialNode = [
-        { id: 'a', position: { x: 0, y: 0 }, data: {} },
-        { id: 'b', position: { x: 100, y: 0 }, data: { label: 'python computation', nodeType: 'python' } },
-        { id: 'c', position: { x: 0, y: 100 }, data: { nodeType: 'javascript' } },
-        { id: 'd', position: {x: 100, y: 100}, data: {nodeType: 'C++'}}
+        makeNode('a'),
+        makeNode('b', { label: 'python computation', nodeType: 'python' }),
+        makeNode('c', { nodeType: 'javascript' }),
+        makeNode('d', { nodeType: 'C++' }),
       ]
 
       const { result } = renderHook(() => useFlowContext(), { wrapper });
-      act(() => 
-        result.current.applyNewOutput({ nodeId: 'a', output: "artifact sample"})
-      )
+      act(() => { result.current.applyNewOutput({ nodeId: 'a', output: "artifact sample" }); })
 
       const nodeB = result.current.nodes.find((node: any) => node.id == 'b');
       const nodeC = result.current.nodes.find((node: any) => node.id == 'c');
@@ -195,15 +226,13 @@ describe('FlowProviderTest', () => {
     //no downstream edges
     it('ApplyNewOutput node isnt connected to any node', () => {
       mockInitialNode = [
-        { id: 'a', position: { x: 0, y: 0 }, data: {} },
-        { id: 'b', position: { x: 100, y: 0 }, data: { label: 'python computation', nodeType: 'python' } },
+        makeNode('a'),
+        makeNode('b', { label: 'python computation', nodeType: 'python' }),
       ];
       mockEdges = [];
 
       const { result } = renderHook(() => useFlowContext(), { wrapper });
-      act(() => 
-        result.current.applyNewOutput({ nodeId: 'a', output: "artifact sample"})
-      )
+      act(() => { result.current.applyNewOutput({ nodeId: 'a', output: "artifact sample" }); })
       
       const nodeA = result.current.nodes.find((node: any) => node.id == 'a');
       const nodeB = result.current.nodes.find((node: any) => node.id == 'b');
@@ -218,15 +247,13 @@ describe('FlowProviderTest', () => {
     //the data beng sent downstream is undefined
     it('ApplyNewOutput with undefined output', () => {
       mockInitialNode = [
-        { id: 'a', position: { x: 0, y: 0 }, data: {} },
-        { id: 'b', position: { x: 100, y: 0 }, data: { label: 'python computation', nodeType: 'python' } },
+        makeNode('a'),
+        makeNode('b', { label: 'python computation', nodeType: 'python' }),
       ];
-      mockEdges = [{ id: 'a-b', source: 'a', target: 'b', sourceHandle: 'output-0', targetHandle: 'input-0' }];
+      mockEdges = [makeEdge('a', 'b', 'out_0', 'in_0')];
 
       const { result } = renderHook(() => useFlowContext(), { wrapper });
-      act(() => {
-        result.current.applyNewOutput({ nodeId: 'a', output: undefined as any })
-      })
+      act(() => { result.current.applyNewOutput({ nodeId: 'a', output: undefined as any }); })
 
       const nodeB = result.current.nodes.find((node: any) => node.id == 'b');
   
@@ -239,62 +266,65 @@ describe('FlowProviderTest', () => {
     //expected: mergeNode.data have both data from 'a' node and 'b' node
     //geuinely don't know if the data.source and data.input should be initlaized before applyNewOutput?
     //problem with onConnect have to check it 
-    it('applyNewOutput updates Merge Flow when merge node uses real Curio node shape', () => {
+    it('two nodes connected to mergeNode', () => {
       mockInitialNode = [
-        {
-          id: 'a', type: '__curioUniversalNode', position: { x: 0, y: 0 },
-          data: {
-            nodeId: 'a',
-            nodeType: 'curio.builtin/computation-analysis@1',
-          },
-        },
-        {
-          id: 'b', type: '__curioUniversalNode', position: { x: 0, y: 100 },
-          data: {
-            nodeId: 'b',
-            nodeType: 'curio.builtin/computation-analysis@1',
-          },
-        },
-        {
-          id: 'merge', type: '__curioUniversalNode', position: { x: 300, y: 50 },
-          data: {
-            nodeId: 'merge',
-            nodeType: NodeType.MERGE_FLOW,
-
-            // This is the important initialized Merge Flow state.
-          },
-        },
+        makeNode('a'),
+        makeNode('b'),
+        makeMergeNode('merge', { source: ['a', 'b'] }),
       ];
 
       mockEdges = [
-        { id: 'a-merge', source: 'a', target: 'merge',sourceHandle: 'out',targetHandle: 'in_0'},
-        { id: 'b-merge', source: 'b', target: 'merge', sourceHandle: 'out', targetHandle: 'in_1'}
+        makeEdge('a', 'merge', 'out', 'in_0'),
+        makeEdge('b', 'merge', 'out', 'in_1'),
       ];
 
       const { result } = renderHook(() => useFlowContext(), { wrapper });
 
-      act(() => {
-        result.current.applyNewOutput({
-          nodeId: 'a',
-          output: "nodeAOutput",
-        });
-      });
+      act(() => { result.current.applyNewOutput({ nodeId: 'a', output: "nodeAOutput" }); });
       
-      act(() => {
-        result.current.applyNewOutput({
-          nodeId: 'b',
-          output: "nodeBOutput",
-        });
-      });
+      act(() => { result.current.applyNewOutput({ nodeId: 'b', output: "nodeBOutput"}); });
 
       const mergeNode = result.current.nodes.find((node: any) => node.id === 'merge');
 
+      console.log(mergeNode?.data);
+      expect(mergeNode?.data.source[0]).toEqual('a');
+      expect(mergeNode?.data.source[1]).toEqual('b');
       expect(mergeNode?.data.input[0]).toEqual("nodeAOutput");
       expect(mergeNode?.data.input[1]).toBe('nodeBOutput');
-      expect(mergeNode?.data.source).toEqual(['a', 'b']);
+    });
+
+    //mergeFlow node receive two inputs and output to one node
+    //a -> merge,  b -> merge,   merge -> c 
+    //expected: c node has data of both a and b node 
+    it('merge node propagate output to downstream node c', () => {
+      mockInitialNode = [
+        makeNode('a'),
+        makeNode('b'),
+        makeMergeNode('merge', { source: ['a', 'b'] }),
+        makeNode('c'),
+      ];
+
+      mockEdges = [
+        makeEdge('a', 'merge', 'out', 'in_0'),
+        makeEdge('b', 'merge', 'out', 'in_1'),
+        makeEdge('merge', 'c'),
+      ];
+
+      const { result } = renderHook(() => useFlowContext(), { wrapper });
+
+      act(() => { result.current.applyNewOutput({ nodeId: 'a', output: 'outputFromA' }); });
+      act(() => { result.current.applyNewOutput({ nodeId: 'b', output: 'outputFromB' }); });
+
+      const nodeC = result.current.nodes.find((n: any) => n.id === 'c');
+      const nodeMerge = result.current.nodes.find((n: any) => n.id === 'merge');
+
+      // Merge received both inputs — this should pass
+      expect(nodeMerge?.data.input[0]).toBe('outputFromA');
+      expect(nodeMerge?.data.input[1]).toBe('outputFromB');
+
+      // THIS IS THE BUG — c should have received the merged data, but it hasn't
+      expect(nodeC?.data.input).toBeDefined();   // will FAIL — input is undefined
+      expect(nodeC?.data.source).toBe('merge');  // will FAIL — source is undefined
     });
   })
 })
-
-
-
